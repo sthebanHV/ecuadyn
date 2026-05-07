@@ -1,0 +1,1784 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>EcuaDyn — Simuladores de Ecuaciones Diferenciales</title>
+
+<!-- Fonts -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=Space+Mono:ital,wght@0,400;0,700;1,400&display=swap" rel="stylesheet">
+
+<!-- Libraries -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/gsap.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/ScrollTrigger.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/3.2.2/es5/tex-chtml.min.js"></script>
+
+<style>
+/* ═══════════════════════════════════════════════════
+   CSS VARIABLES & RESET
+═══════════════════════════════════════════════════ */
+:root {
+  --bg:        #030712;
+  --bg2:       #0a1120;
+  --bg3:       #0f1f35;
+  --panel:     rgba(10,25,50,0.7);
+  --border:    rgba(0,200,255,0.15);
+  --border2:   rgba(0,200,255,0.35);
+  --cyan:      #00d4ff;
+  --cyan2:     #00f5ff;
+  --blue:      #0066ff;
+  --electric:  #1a90ff;
+  --neon:      #00ffaa;
+  --neon2:     #7fff00;
+  --orange:    #ff6b2b;
+  --purple:    #8b5cf6;
+  --text:      #e2eeff;
+  --text2:     #7aadcc;
+  --text3:     #3a6080;
+  --glow:      0 0 20px rgba(0,212,255,0.4);
+  --glow2:     0 0 40px rgba(0,212,255,0.2);
+  --r:         12px;
+  --r2:        20px;
+  --font:      'Syne', sans-serif;
+  --mono:      'Space Mono', monospace;
+}
+
+*, *::before, *::after { margin:0; padding:0; box-sizing:border-box; }
+
+html { scroll-behavior: smooth; }
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font);
+  overflow-x: hidden;
+  cursor: none;
+}
+
+/* ═══════════════════════════════════════════════════
+   CUSTOM CURSOR
+═══════════════════════════════════════════════════ */
+#cursor {
+  position: fixed; width:12px; height:12px;
+  background: var(--cyan); border-radius:50%;
+  pointer-events: none; z-index: 9999;
+  transform: translate(-50%,-50%);
+  transition: transform 0.1s, width 0.2s, height 0.2s, background 0.2s;
+  box-shadow: 0 0 15px var(--cyan);
+  mix-blend-mode: screen;
+}
+#cursor-ring {
+  position: fixed; width:36px; height:36px;
+  border:1px solid rgba(0,212,255,0.5); border-radius:50%;
+  pointer-events: none; z-index: 9998;
+  transform: translate(-50%,-50%);
+  transition: transform 0.15s ease, width 0.3s, height 0.3s;
+}
+body:has(a:hover) #cursor,
+body:has(button:hover) #cursor { width:20px; height:20px; background: var(--neon); }
+body:has(a:hover) #cursor-ring,
+body:has(button:hover) #cursor-ring { width:50px; height:50px; border-color: var(--neon); }
+
+/* ═══════════════════════════════════════════════════
+   LOADING SCREEN
+═══════════════════════════════════════════════════ */
+#loader {
+  position: fixed; inset:0;
+  background: var(--bg);
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  z-index: 10000;
+}
+.loader-logo {
+  font-size: clamp(3rem, 8vw, 6rem);
+  font-weight: 800;
+  letter-spacing: -2px;
+  background: linear-gradient(135deg, var(--cyan), var(--electric), var(--neon));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  margin-bottom: 2rem;
+}
+.loader-bar-wrap {
+  width: 300px; height: 3px;
+  background: rgba(255,255,255,0.05);
+  border-radius: 99px; overflow: hidden;
+  position: relative;
+}
+.loader-bar {
+  height: 100%;
+  background: linear-gradient(90deg, var(--cyan), var(--neon));
+  border-radius: 99px;
+  width: 0%;
+  transition: width 0.1s linear;
+  box-shadow: 0 0 10px var(--cyan);
+}
+.loader-text {
+  margin-top: 1rem;
+  font-family: var(--mono);
+  font-size: 0.75rem;
+  color: var(--text3);
+  letter-spacing: 3px;
+  text-transform: uppercase;
+}
+
+/* ═══════════════════════════════════════════════════
+   PARTICLE CANVAS
+═══════════════════════════════════════════════════ */
+#particle-canvas {
+  position: fixed; inset: 0;
+  pointer-events: none; z-index: 0;
+  opacity: 0.4;
+}
+
+/* ═══════════════════════════════════════════════════
+   NAVIGATION
+═══════════════════════════════════════════════════ */
+nav {
+  position: fixed; top:0; left:0; right:0;
+  z-index: 100;
+  padding: 1.2rem 2.5rem;
+  display: flex; align-items: center; justify-content: space-between;
+  background: linear-gradient(180deg, rgba(3,7,18,0.95) 0%, transparent 100%);
+  backdrop-filter: blur(10px);
+  border-bottom: 1px solid var(--border);
+}
+.nav-logo {
+  font-size: 1.4rem; font-weight: 800;
+  background: linear-gradient(90deg, var(--cyan), var(--neon));
+  -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+  letter-spacing: -1px;
+  text-decoration: none;
+}
+.nav-links {
+  display: flex; gap: 0.5rem; list-style: none;
+  flex-wrap: wrap;
+}
+.nav-links a {
+  font-family: var(--mono); font-size: 0.7rem;
+  color: var(--text2); text-decoration: none;
+  padding: 0.4rem 0.8rem;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  transition: all 0.2s;
+  letter-spacing: 1px;
+}
+.nav-links a:hover, .nav-links a.active {
+  color: var(--cyan); border-color: var(--border2);
+  background: rgba(0,212,255,0.05);
+}
+.nav-badge {
+  display: inline-block; width:18px; height:18px;
+  background: var(--bg3); border:1px solid var(--border2);
+  border-radius: 4px; text-align: center; line-height:18px;
+  font-size: 0.6rem; margin-right: 4px; color: var(--cyan);
+}
+
+/* ═══════════════════════════════════════════════════
+   HERO / LANDING
+═══════════════════════════════════════════════════ */
+#hero {
+  position: relative; min-height: 100vh;
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  text-align: center;
+  padding: 8rem 2rem 4rem;
+  z-index: 1;
+  overflow: hidden;
+}
+#hero-canvas { position: absolute; inset:0; z-index:0; }
+
+.hero-badge {
+  display: inline-flex; align-items: center; gap:0.5rem;
+  border: 1px solid var(--border2);
+  border-radius: 99px;
+  padding: 0.4rem 1rem;
+  font-family: var(--mono); font-size: 0.7rem;
+  color: var(--cyan); letter-spacing: 2px;
+  margin-bottom: 2rem;
+  background: rgba(0,212,255,0.05);
+  backdrop-filter: blur(10px);
+  position: relative; z-index:2;
+  opacity: 0; transform: translateY(20px);
+}
+.hero-badge .dot {
+  width:6px; height:6px; background: var(--neon);
+  border-radius:50%; animation: pulse 2s infinite;
+}
+@keyframes pulse { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:0.5;transform:scale(1.5)} }
+
+.hero-title {
+  font-size: clamp(3rem, 9vw, 8rem);
+  font-weight: 800; line-height: 0.95;
+  letter-spacing: -4px;
+  position: relative; z-index:2;
+  opacity: 0;
+}
+.hero-title .line1 {
+  display: block;
+  background: linear-gradient(135deg, #fff 30%, var(--cyan));
+  -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+}
+.hero-title .line2 {
+  display: block;
+  background: linear-gradient(135deg, var(--cyan), var(--neon));
+  -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+}
+.hero-sub {
+  max-width: 600px; margin: 2rem auto 0;
+  font-size: 1.1rem; color: var(--text2);
+  line-height: 1.7;
+  position: relative; z-index:2;
+  opacity: 0;
+}
+.hero-actions {
+  display: flex; gap:1rem; flex-wrap:wrap;
+  justify-content: center; margin-top: 3rem;
+  position: relative; z-index:2;
+  opacity: 0;
+}
+.btn-primary {
+  padding: 0.9rem 2.5rem;
+  background: linear-gradient(135deg, var(--blue), var(--cyan));
+  color: #fff; border: none; border-radius: var(--r);
+  font-family: var(--font); font-size: 0.95rem; font-weight: 700;
+  cursor: pointer; transition: all 0.3s;
+  box-shadow: 0 0 30px rgba(0,102,255,0.4);
+  position: relative; overflow: hidden;
+}
+.btn-primary::before {
+  content:''; position:absolute; inset:-50%;
+  background: conic-gradient(transparent 40%, rgba(255,255,255,0.3), transparent 60%);
+  animation: spin 4s linear infinite; opacity:0;
+  transition: opacity 0.3s;
+}
+.btn-primary:hover::before { opacity:1; }
+.btn-primary:hover { transform: translateY(-2px); box-shadow: 0 0 50px rgba(0,102,255,0.6); }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+.btn-outline {
+  padding: 0.9rem 2.5rem;
+  background: transparent; color: var(--cyan);
+  border: 1px solid var(--border2); border-radius: var(--r);
+  font-family: var(--font); font-size: 0.95rem; font-weight: 600;
+  cursor: pointer; transition: all 0.3s;
+}
+.btn-outline:hover {
+  background: rgba(0,212,255,0.08);
+  border-color: var(--cyan);
+  box-shadow: var(--glow);
+  transform: translateY(-2px);
+}
+
+/* Stats row */
+.hero-stats {
+  display: flex; gap:3rem; flex-wrap:wrap;
+  justify-content: center; margin-top: 5rem;
+  position: relative; z-index:2;
+}
+.hero-stat {
+  text-align: center; opacity:0;
+}
+.hero-stat-num {
+  font-size: 2.5rem; font-weight: 800;
+  background: linear-gradient(135deg, var(--cyan), var(--neon));
+  -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+}
+.hero-stat-label {
+  font-family: var(--mono); font-size: 0.65rem;
+  color: var(--text3); letter-spacing: 2px; text-transform: uppercase;
+  margin-top: 0.3rem;
+}
+
+/* Scroll indicator */
+.scroll-hint {
+  position: absolute; bottom:2rem; left:50%;
+  transform: translateX(-50%);
+  z-index:2; opacity:0.5;
+  display: flex; flex-direction: column; align-items: center; gap: 0.5rem;
+}
+.scroll-hint span { font-family: var(--mono); font-size:0.65rem; letter-spacing:3px; color:var(--text3); }
+.scroll-arrow { width:1px; height:40px; background: linear-gradient(180deg,var(--cyan),transparent); animation: scrolldown 1.5s infinite; }
+@keyframes scrolldown { 0%{transform:scaleY(0);transform-origin:top} 50%{transform:scaleY(1);transform-origin:top} 51%{transform:scaleY(1);transform-origin:bottom} 100%{transform:scaleY(0);transform-origin:bottom} }
+
+/* ═══════════════════════════════════════════════════
+   MODULE GRID (CASES OVERVIEW)
+═══════════════════════════════════════════════════ */
+#modules {
+  position: relative; z-index:1;
+  padding: 6rem 2rem;
+  max-width: 1300px; margin: 0 auto;
+}
+.section-header {
+  text-align: center; margin-bottom: 4rem;
+}
+.section-tag {
+  font-family: var(--mono); font-size: 0.7rem;
+  letter-spacing: 3px; color: var(--cyan); text-transform: uppercase;
+  margin-bottom: 1rem;
+}
+.section-title {
+  font-size: clamp(2rem,5vw,3.5rem);
+  font-weight: 800; letter-spacing: -2px;
+  background: linear-gradient(135deg,#fff,var(--text2));
+  -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+}
+.modules-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit,minmax(240px,1fr));
+  gap: 1.5rem;
+}
+.module-card {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: var(--r2);
+  padding: 2rem;
+  cursor: pointer;
+  transition: all 0.3s;
+  backdrop-filter: blur(20px);
+  position: relative; overflow: hidden;
+  opacity: 0; transform: translateY(30px);
+}
+.module-card::before {
+  content:''; position:absolute; top:-50%; left:-50%;
+  width:200%; height:200%;
+  background: radial-gradient(circle, rgba(0,212,255,0.05) 0%, transparent 60%);
+  opacity:0; transition: opacity 0.4s;
+}
+.module-card:hover { border-color: var(--border2); transform: translateY(-5px); box-shadow: var(--glow2); }
+.module-card:hover::before { opacity:1; }
+.module-num {
+  font-family: var(--mono); font-size: 0.65rem;
+  color: var(--text3); letter-spacing:3px; margin-bottom:1rem;
+}
+.module-icon { font-size: 2.5rem; margin-bottom: 1rem; }
+.module-title { font-size: 1.3rem; font-weight:700; margin-bottom:0.5rem; }
+.module-desc { font-size: 0.85rem; color: var(--text2); line-height:1.6; }
+.module-tag {
+  display: inline-block; margin-top: 1.2rem;
+  font-family: var(--mono); font-size: 0.65rem;
+  padding: 0.3rem 0.7rem; border-radius:99px;
+  border: 1px solid; letter-spacing:1px;
+}
+.tag-cyan   { color:var(--cyan);   border-color:rgba(0,212,255,0.3); background:rgba(0,212,255,0.05); }
+.tag-neon   { color:var(--neon);   border-color:rgba(0,255,170,0.3); background:rgba(0,255,170,0.05); }
+.tag-blue   { color:var(--electric); border-color:rgba(26,144,255,0.3); background:rgba(26,144,255,0.05); }
+.tag-orange { color:var(--orange); border-color:rgba(255,107,43,0.3); background:rgba(255,107,43,0.05); }
+.tag-purple { color:var(--purple); border-color:rgba(139,92,246,0.3); background:rgba(139,92,246,0.05); }
+
+/* ═══════════════════════════════════════════════════
+   SIMULATOR PAGES
+═══════════════════════════════════════════════════ */
+.sim-page {
+  display: none; position: relative; z-index:1;
+  min-height: 100vh; padding-top: 80px;
+}
+.sim-page.active { display: block; }
+
+.sim-header {
+  padding: 3rem 2rem 2rem;
+  max-width: 1300px; margin:0 auto;
+  display: flex; align-items: flex-start;
+  justify-content: space-between; flex-wrap:wrap; gap:1rem;
+}
+.sim-back {
+  font-family: var(--mono); font-size:0.8rem;
+  color:var(--text2); cursor:pointer;
+  display:flex; align-items:center; gap:0.5rem;
+  border:none; background:transparent;
+  padding: 0.5rem 1rem;
+  border: 1px solid var(--border);
+  border-radius:var(--r);
+  transition: all 0.2s;
+}
+.sim-back:hover { color:var(--cyan); border-color:var(--border2); }
+.sim-title-wrap { flex:1; min-width:250px; }
+.sim-number { font-family:var(--mono); font-size:0.7rem; color:var(--cyan); letter-spacing:3px; margin-bottom:0.5rem; }
+.sim-title { font-size:clamp(1.8rem,4vw,3rem); font-weight:800; letter-spacing:-2px; }
+.sim-subtitle { color:var(--text2); margin-top:0.5rem; font-size:1rem; }
+
+.sim-body {
+  max-width:1300px; margin:0 auto;
+  padding:0 2rem 4rem;
+  display: grid; gap: 1.5rem;
+}
+
+/* Sim layout panels */
+.sim-grid-2 { display:grid; grid-template-columns:1fr 1fr; gap:1.5rem; }
+.sim-grid-3 { display:grid; grid-template-columns:1fr 1fr 1fr; gap:1.5rem; }
+@media(max-width:900px) { .sim-grid-2,.sim-grid-3 { grid-template-columns:1fr; } }
+
+.panel {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: var(--r2);
+  padding: 1.5rem;
+  backdrop-filter: blur(20px);
+  position: relative; overflow: hidden;
+}
+.panel-title {
+  font-family: var(--mono); font-size:0.7rem;
+  letter-spacing:2px; color:var(--cyan); text-transform:uppercase;
+  margin-bottom:1.2rem; display:flex; align-items:center; gap:0.5rem;
+}
+.panel-title::before {
+  content:''; display:block; width:8px; height:8px;
+  border-radius:2px; background:var(--cyan);
+}
+
+/* Theory panel */
+.theory-text { color:var(--text2); line-height:1.7; font-size:0.9rem; }
+.theory-text p { margin-bottom:0.8rem; }
+.formula-block {
+  background: rgba(0,212,255,0.05);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--cyan);
+  border-radius: var(--r);
+  padding: 1rem 1.5rem;
+  margin: 1rem 0;
+  font-family: var(--mono); color:var(--cyan);
+  font-size:0.9rem;
+  overflow-x: auto;
+}
+
+/* Controls */
+.control-group { margin-bottom: 1.2rem; }
+.control-label {
+  display:flex; justify-content:space-between; align-items:center;
+  margin-bottom:0.5rem;
+}
+.control-label span:first-child {
+  font-family:var(--mono); font-size:0.75rem; color:var(--text2);
+}
+.control-value {
+  font-family:var(--mono); font-size:0.8rem;
+  color:var(--cyan); background:rgba(0,212,255,0.1);
+  padding:0.2rem 0.6rem; border-radius:6px;
+  border:1px solid var(--border);
+}
+input[type=range] {
+  width:100%; height:4px;
+  background: linear-gradient(90deg, var(--cyan) 0%, var(--bg3) 0%);
+  border-radius:99px; outline:none; border:none;
+  cursor:pointer; -webkit-appearance:none;
+  transition: background 0.1s;
+}
+input[type=range]::-webkit-slider-thumb {
+  -webkit-appearance:none;
+  width:16px; height:16px; border-radius:50%;
+  background:var(--cyan); cursor:pointer;
+  box-shadow: 0 0 10px var(--cyan);
+  transition: transform 0.2s;
+}
+input[type=range]::-webkit-slider-thumb:hover { transform:scale(1.3); }
+
+/* Buttons row */
+.btn-row { display:flex; gap:0.8rem; flex-wrap:wrap; margin-top:1.5rem; }
+.btn-sim {
+  flex:1; min-width:80px;
+  padding:0.7rem 1rem; border-radius:var(--r);
+  border:1px solid var(--border); background:transparent;
+  font-family:var(--font); font-size:0.85rem; font-weight:600;
+  cursor:pointer; transition:all 0.2s; color:var(--text);
+}
+.btn-sim.primary { background:linear-gradient(135deg,var(--blue),var(--cyan)); border-color:transparent; color:#fff; box-shadow:0 0 20px rgba(0,102,255,0.3); }
+.btn-sim.primary:hover { box-shadow:0 0 30px rgba(0,102,255,0.5); transform:translateY(-1px); }
+.btn-sim.danger { border-color:rgba(255,107,43,0.4); color:var(--orange); }
+.btn-sim.danger:hover { background:rgba(255,107,43,0.1); }
+.btn-sim:not(.primary):not(.danger):hover { border-color:var(--border2); color:var(--cyan); }
+.btn-sim.active-btn { background:rgba(0,255,170,0.1); border-color:var(--neon); color:var(--neon); }
+
+/* Metrics */
+.metrics-grid { display:grid; grid-template-columns:1fr 1fr; gap:1rem; }
+.metric-card {
+  background: rgba(0,212,255,0.03);
+  border:1px solid var(--border); border-radius:var(--r);
+  padding:1rem;
+}
+.metric-label { font-family:var(--mono); font-size:0.65rem; color:var(--text3); letter-spacing:2px; text-transform:uppercase; }
+.metric-value {
+  font-size:1.6rem; font-weight:800; margin-top:0.3rem;
+  font-family:var(--mono);
+}
+.metric-unit { font-size:0.75rem; color:var(--text2); margin-left:0.3rem; }
+
+/* Status indicator */
+.status-row { display:flex; gap:0.8rem; flex-wrap:wrap; align-items:center; }
+.indicator {
+  display:flex; align-items:center; gap:0.5rem;
+  font-family:var(--mono); font-size:0.7rem; color:var(--text2);
+}
+.indicator-dot {
+  width:8px; height:8px; border-radius:50%;
+  animation:pulse 2s infinite;
+}
+.ind-green { background:var(--neon); box-shadow:0 0 6px var(--neon); }
+.ind-yellow { background:#ffbb00; box-shadow:0 0 6px #ffbb00; }
+.ind-red { background:#ff4444; box-shadow:0 0 6px #ff4444; }
+.ind-blue { background:var(--cyan); box-shadow:0 0 6px var(--cyan); }
+
+/* Canvas container */
+.canvas-wrap {
+  width:100%; aspect-ratio:16/9;
+  background: rgba(0,0,20,0.5);
+  border-radius:var(--r); overflow:hidden;
+  position:relative;
+  border:1px solid var(--border);
+}
+.canvas-wrap canvas { width:100%; height:100%; display:block; }
+
+/* Chart */
+.chart-wrap { width:100%; height:280px; position:relative; }
+
+/* Progress bar */
+.progress-bar-wrap {
+  width:100%; height:8px;
+  background:rgba(255,255,255,0.05);
+  border-radius:99px; overflow:hidden; margin-top:0.5rem;
+}
+.progress-bar {
+  height:100%; border-radius:99px;
+  transition: width 0.3s ease;
+  background: linear-gradient(90deg, var(--cyan), var(--neon));
+  box-shadow: 0 0 8px var(--cyan);
+}
+
+/* Speed control */
+.speed-display {
+  font-family:var(--mono); font-size:0.8rem;
+  color:var(--cyan);
+  background:rgba(0,212,255,0.1);
+  padding:0.4rem 0.8rem; border-radius:6px;
+  border:1px solid var(--border);
+  display:inline-block;
+}
+
+/* Timeline */
+.timeline-bar {
+  width:100%; height:3px;
+  background:rgba(255,255,255,0.05);
+  border-radius:99px; margin-top:1rem; position:relative;
+  overflow:hidden;
+}
+.timeline-progress {
+  height:100%; border-radius:99px;
+  background: linear-gradient(90deg,var(--cyan),var(--neon));
+  box-shadow:0 0 8px var(--cyan);
+  width:0%; transition:width 0.1s linear;
+}
+
+/* ═══════════════════════════════════════════════════
+   FOOTER
+═══════════════════════════════════════════════════ */
+footer {
+  position:relative; z-index:1;
+  padding: 4rem 2rem 3rem;
+  border-top: 1px solid var(--border);
+  background: linear-gradient(0deg, rgba(0,5,20,0.8), transparent);
+  text-align: center;
+}
+.footer-logo {
+  font-size:2rem; font-weight:800; letter-spacing:-1px;
+  background: linear-gradient(90deg,var(--cyan),var(--neon));
+  -webkit-background-clip:text; -webkit-text-fill-color:transparent;
+  margin-bottom:1.5rem;
+}
+.footer-info {
+  font-family:var(--mono); font-size:0.8rem; color:var(--text3);
+  line-height:1.8; letter-spacing:1px;
+}
+.footer-divider {
+  width:60px; height:1px;
+  background:linear-gradient(90deg,transparent,var(--cyan),transparent);
+  margin:2rem auto;
+}
+
+/* ═══════════════════════════════════════════════════
+   GRID BACKGROUND
+═══════════════════════════════════════════════════ */
+.grid-bg {
+  position:fixed; inset:0; z-index:0; pointer-events:none;
+  background-image:
+    linear-gradient(rgba(0,212,255,0.03) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(0,212,255,0.03) 1px, transparent 1px);
+  background-size: 60px 60px;
+}
+
+/* ═══════════════════════════════════════════════════
+   TUTORIAL MODAL
+═══════════════════════════════════════════════════ */
+#tutorial-modal {
+  display:none;
+  position:fixed; inset:0; z-index:1000;
+  background:rgba(0,0,0,0.7); backdrop-filter:blur(10px);
+  align-items:center; justify-content:center;
+}
+#tutorial-modal.open { display:flex; }
+.tutorial-box {
+  background:var(--bg2); border:1px solid var(--border2);
+  border-radius:var(--r2); padding:2.5rem;
+  max-width:480px; width:90%; position:relative;
+}
+.tutorial-close {
+  position:absolute; top:1rem; right:1rem;
+  background:none; border:none; color:var(--text2);
+  font-size:1.5rem; cursor:pointer;
+  transition:color 0.2s;
+}
+.tutorial-close:hover { color:var(--cyan); }
+.tutorial-title { font-size:1.5rem; font-weight:800; margin-bottom:1rem; }
+.tutorial-step {
+  display:none;
+}
+.tutorial-step.active { display:block; }
+.tutorial-step-text { color:var(--text2); line-height:1.7; font-size:0.95rem; margin-bottom:1.5rem; }
+.tutorial-nav { display:flex; gap:0.8rem; justify-content:flex-end; }
+
+/* ═══════════════════════════════════════════════════
+   COMPARE MODAL
+═══════════════════════════════════════════════════ */
+#compare-panel {
+  display:none;
+  position:fixed; bottom:2rem; left:50%;
+  transform:translateX(-50%);
+  z-index:500;
+  background:var(--bg2); border:1px solid var(--border2);
+  border-radius:var(--r2); padding:1.5rem 2rem;
+  min-width:300px;
+  box-shadow:0 20px 60px rgba(0,0,0,0.5);
+}
+#compare-panel.open { display:block; }
+.compare-title { font-family:var(--mono); font-size:0.7rem; color:var(--cyan); letter-spacing:2px; margin-bottom:1rem; }
+.compare-item { display:flex; justify-content:space-between; align-items:center; padding:0.4rem 0; border-bottom:1px solid var(--border); }
+.compare-item:last-child { border:none; }
+.compare-key { font-family:var(--mono); font-size:0.75rem; color:var(--text2); }
+.compare-val { font-family:var(--mono); font-size:0.85rem; color:var(--cyan); font-weight:bold; }
+
+/* ═══════════════════════════════════════════════════
+   RESPONSIVE
+═══════════════════════════════════════════════════ */
+@media(max-width:600px) {
+  nav { padding:1rem; }
+  .nav-links { display:none; }
+  .hero-title { font-size: 3rem; letter-spacing:-2px; }
+  .sim-body { padding:0 1rem 3rem; }
+  .metrics-grid { grid-template-columns:1fr; }
+  .btn-row { flex-direction:column; }
+}
+
+/* Glow text utility */
+.glow-text { text-shadow: 0 0 20px var(--cyan); }
+
+/* Shine animation for panels */
+@keyframes shine {
+  0% { left:-100%; }
+  100% { left:200%; }
+}
+.panel:hover::after {
+  content:''; position:absolute;
+  top:0; left:-100%; width:50%; height:100%;
+  background:linear-gradient(90deg,transparent,rgba(255,255,255,0.03),transparent);
+  animation:shine 1s ease forwards;
+  pointer-events:none;
+}
+
+/* Data streaming animation */
+@keyframes datastream {
+  0%{opacity:1} 50%{opacity:0.3} 100%{opacity:1}
+}
+.live-dot {
+  display:inline-block; width:6px; height:6px;
+  background:var(--neon); border-radius:50%;
+  margin-right:6px; animation:pulse 1.5s infinite;
+}
+</style>
+</head>
+<body>
+
+<!-- Cursor -->
+<div id="cursor"></div>
+<div id="cursor-ring"></div>
+
+<!-- Grid Background -->
+<div class="grid-bg"></div>
+
+<!-- Particle Canvas -->
+<canvas id="particle-canvas"></canvas>
+
+<!-- Loading Screen -->
+<div id="loader">
+  <div class="loader-logo">EcuaDyn</div>
+  <div class="loader-bar-wrap"><div class="loader-bar" id="loader-bar"></div></div>
+  <div class="loader-text" id="loader-text">INICIALIZANDO MOTORES...</div>
+</div>
+
+<!-- Navigation -->
+<nav>
+  <a class="nav-logo" href="#" onclick="showHome()">EcuaDyn</a>
+  <ul class="nav-links">
+    <li><a href="#" onclick="showHome()" id="nav-home">INICIO</a></li>
+    <li><a href="#" onclick="showSim(0)" id="nav-0"><span class="nav-badge">01</span>POBLACIÓN</a></li>
+    <li><a href="#" onclick="showSim(1)" id="nav-1"><span class="nav-badge">02</span>TEMPERATURA</a></li>
+    <li><a href="#" onclick="showSim(2)" id="nav-2"><span class="nav-badge">03</span>MEZCLAS</a></li>
+    <li><a href="#" onclick="showSim(3)" id="nav-3"><span class="nav-badge">04</span>CIRCUITOS</a></li>
+    <li><a href="#" onclick="showSim(4)" id="nav-4"><span class="nav-badge">05</span>VIDA MEDIA</a></li>
+    <li><a href="#" onclick="openTutorial()">?</a></li>
+  </ul>
+</nav>
+
+<!-- ════════════════════════════════════
+     HOME PAGE
+════════════════════════════════════ -->
+<div id="home-page">
+
+<section id="hero">
+  <canvas id="hero-canvas"></canvas>
+
+  <div class="hero-badge"><span class="dot"></span>PROYECTO FINAL · ECUACIONES DIFERENCIALES</div>
+  <h1 class="hero-title">
+    <span class="line1">ECUACIONES</span>
+    <span class="line2">DIFERENCIALES</span>
+  </h1>
+  <p class="hero-sub">
+    Cinco simuladores interactivos que transforman modelos matemáticos en experiencias visuales inmersivas. Explora crecimiento poblacional, transferencia de calor, mezclas químicas, circuitos RC y degradación de materiales.
+  </p>
+  <div class="hero-actions">
+    <button class="btn-primary" onclick="document.getElementById('modules').scrollIntoView({behavior:'smooth'})">EXPLORAR SIMULADORES</button>
+    <button class="btn-outline" onclick="openTutorial()">VER TUTORIAL</button>
+  </div>
+
+  <div class="hero-stats">
+    <div class="hero-stat"><div class="hero-stat-num">5</div><div class="hero-stat-label">Simuladores</div></div>
+    <div class="hero-stat"><div class="hero-stat-num">2</div><div class="hero-stat-label">Métodos EDO</div></div>
+    <div class="hero-stat"><div class="hero-stat-num">∞</div><div class="hero-stat-label">Configuraciones</div></div>
+    <div class="hero-stat"><div class="hero-stat-num">RT</div><div class="hero-stat-label">Tiempo Real</div></div>
+  </div>
+
+  <div class="scroll-hint"><span>SCROLL</span><div class="scroll-arrow"></div></div>
+</section>
+
+<section id="modules">
+  <div class="section-header">
+    <div class="section-tag">MÓDULOS DEL SISTEMA</div>
+    <h2 class="section-title">Cinco Casos de Estudio</h2>
+  </div>
+  <div class="modules-grid">
+    <div class="module-card" onclick="showSim(0)">
+      <div class="module-num">CASO · 01</div>
+      <div class="module-icon">🌍</div>
+      <div class="module-title">Crecimiento Poblacional</div>
+      <div class="module-desc">Modelo de Malthus aplicado a Colombia 2018–2026. Crecimiento exponencial con tasa k = 0.012.</div>
+      <div class="module-tag tag-cyan">Variables Separables</div>
+    </div>
+    <div class="module-card" onclick="showSim(1)">
+      <div class="module-num">CASO · 02</div>
+      <div class="module-icon">🌡️</div>
+      <div class="module-title">Enfriamiento de Newton</div>
+      <div class="module-desc">Celular a 45°C enfriándose en habitación a 20°C. ¿Cuándo alcanza los 25°C?</div>
+      <div class="module-tag tag-orange">Variables Separables</div>
+    </div>
+    <div class="module-card" onclick="showSim(2)">
+      <div class="module-num">CASO · 03</div>
+      <div class="module-icon">🧪</div>
+      <div class="module-title">Mezclas Químicas</div>
+      <div class="module-desc">Tanque de 1000L con cloración continua. Concentración dinámica de cloro en tiempo real.</div>
+      <div class="module-tag tag-neon">Factor Integrante</div>
+    </div>
+    <div class="module-card" onclick="showSim(3)">
+      <div class="module-num">CASO · 04</div>
+      <div class="module-icon">⚡</div>
+      <div class="module-title">Circuito RC</div>
+      <div class="module-desc">Carga del condensador en circuito R=1kΩ, C=1mF, E=12V. Segunda Ley de Kirchhoff.</div>
+      <div class="module-tag tag-blue">Ecuación Lineal</div>
+    </div>
+    <div class="module-card" onclick="showSim(4)">
+      <div class="module-num">CASO · 05</div>
+      <div class="module-icon">🏍️</div>
+      <div class="module-title">Vida Media del Aceite</div>
+      <div class="module-desc">Degradación exponencial de aceite sintético. Vida media 3000 km — ¿qué queda a 5000 km?</div>
+      <div class="module-tag tag-purple">Decaimiento Exponencial</div>
+    </div>
+  </div>
+</section>
+
+</div><!-- end home-page -->
+
+<!-- ════════════════════════════════════
+     SIMULATOR 1: POBLACIÓN
+════════════════════════════════════ -->
+<div id="sim-0" class="sim-page">
+  <div class="sim-header">
+    <button class="sim-back" onclick="showHome()">← VOLVER</button>
+    <div class="sim-title-wrap">
+      <div class="sim-number">CASO 01 · VARIABLES SEPARABLES</div>
+      <h2 class="sim-title">Crecimiento Poblacional</h2>
+      <p class="sim-subtitle">Modelo de Malthus — Colombia 2018–2026</p>
+    </div>
+  </div>
+  <div class="sim-body">
+    <!-- Row 1: theory + controls -->
+    <div class="sim-grid-2">
+      <div class="panel">
+        <div class="panel-title">Marco Teórico</div>
+        <div class="theory-text">
+          <p>El modelo de Malthus establece que la tasa de cambio de la población es proporcional a la población actual:</p>
+          <div class="formula-block">dP/dt = k·P</div>
+          <p>Al separar variables e integrar: <strong>P(t) = P₀·e^(kt)</strong></p>
+          <p>Donde <em>k</em> es la tasa de crecimiento neta anual y <em>P₀</em> la población inicial.</p>
+          <div class="formula-block">P(t) = 48 · e^(0.012t)</div>
+        </div>
+      </div>
+      <div class="panel">
+        <div class="panel-title">Parámetros de Simulación</div>
+        <div class="control-group">
+          <div class="control-label"><span>Población Inicial P₀ (millones)</span><span class="control-value" id="p0-val">48</span></div>
+          <input type="range" id="p0-slider" min="30" max="80" step="1" value="48">
+        </div>
+        <div class="control-group">
+          <div class="control-label"><span>Tasa de Crecimiento k</span><span class="control-value" id="k-val">0.012</span></div>
+          <input type="range" id="k-slider" min="0.001" max="0.05" step="0.001" value="0.012">
+        </div>
+        <div class="control-group">
+          <div class="control-label"><span>Año Inicial</span><span class="control-value" id="year0-val">2018</span></div>
+          <input type="range" id="year0-slider" min="2000" max="2020" step="1" value="2018">
+        </div>
+        <div class="control-group">
+          <div class="control-label"><span>Años a proyectar</span><span class="control-value" id="tyears-val">8</span></div>
+          <input type="range" id="tyears-slider" min="1" max="30" step="1" value="8">
+        </div>
+        <div class="btn-row">
+          <button class="btn-sim primary" onclick="sim1.start()">▶ SIMULAR</button>
+          <button class="btn-sim" id="sim1-pause" onclick="sim1.togglePause()">⏸ PAUSAR</button>
+          <button class="btn-sim danger" onclick="sim1.reset()">↺ RESET</button>
+        </div>
+      </div>
+    </div>
+    <!-- Row 2: visual + metrics -->
+    <div class="sim-grid-2">
+      <div class="panel">
+        <div class="panel-title">Visualización 3D — Mundo</div>
+        <div class="canvas-wrap" style="aspect-ratio:1.5"><canvas id="sim1-3d"></canvas></div>
+        <div class="timeline-bar"><div class="timeline-progress" id="sim1-timeline"></div></div>
+      </div>
+      <div class="panel">
+        <div class="panel-title">Gráfica Dinámica</div>
+        <div class="chart-wrap"><canvas id="sim1-chart"></canvas></div>
+        <div class="status-row" style="margin-top:1rem">
+          <div class="indicator"><div class="indicator-dot ind-green"></div><span id="sim1-status">LISTO</span></div>
+          <div class="speed-display">Velocidad: <span id="sim1-speed">1x</span></div>
+        </div>
+      </div>
+    </div>
+    <!-- Row 3: metrics -->
+    <div class="panel">
+      <div class="panel-title">Panel de Métricas en Tiempo Real</div>
+      <div class="metrics-grid">
+        <div class="metric-card"><div class="metric-label">Año Actual</div><div class="metric-value" id="m1-year" style="color:var(--cyan)">2018</div></div>
+        <div class="metric-card"><div class="metric-label">Población Actual</div><div class="metric-value" id="m1-pop" style="color:var(--neon)">48.00<span class="metric-unit">M</span></div></div>
+        <div class="metric-card"><div class="metric-label">Crecimiento Neto</div><div class="metric-value" id="m1-delta" style="color:var(--orange)">0<span class="metric-unit">M/año</span></div></div>
+        <div class="metric-card"><div class="metric-label">Resultado 2026</div><div class="metric-value" id="m1-result" style="color:var(--purple)">52.84<span class="metric-unit">M</span></div></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════
+     SIMULATOR 2: TEMPERATURA
+════════════════════════════════════ -->
+<div id="sim-1" class="sim-page">
+  <div class="sim-header">
+    <button class="sim-back" onclick="showHome()">← VOLVER</button>
+    <div class="sim-title-wrap">
+      <div class="sim-number">CASO 02 · VARIABLES SEPARABLES</div>
+      <h2 class="sim-title">Ley de Enfriamiento de Newton</h2>
+      <p class="sim-subtitle">Celular enfriándose desde 45°C hasta 25°C</p>
+    </div>
+  </div>
+  <div class="sim-body">
+    <div class="sim-grid-2">
+      <div class="panel">
+        <div class="panel-title">Marco Teórico</div>
+        <div class="theory-text">
+          <p>La velocidad de cambio de temperatura es proporcional a la diferencia con el entorno:</p>
+          <div class="formula-block">dT/dt = k·(T − T_amb)</div>
+          <p>Solución general: <strong>T(t) = T_amb + C·e^(kt)</strong></p>
+          <p>Con condición inicial T(0) = 45, T_amb = 20, k ≈ −0.1021:</p>
+          <div class="formula-block">T(t) = 20 + 25·e^(−0.1021t)</div>
+          <p>Tiempo para 25°C: <strong>t ≈ 15.75 min</strong></p>
+        </div>
+      </div>
+      <div class="panel">
+        <div class="panel-title">Parámetros de Simulación</div>
+        <div class="control-group">
+          <div class="control-label"><span>Temperatura Inicial T₀ (°C)</span><span class="control-value" id="t0-val">45</span></div>
+          <input type="range" id="t0-slider" min="25" max="100" step="1" value="45">
+        </div>
+        <div class="control-group">
+          <div class="control-label"><span>Temperatura Ambiente T_amb (°C)</span><span class="control-value" id="tamb-val">20</span></div>
+          <input type="range" id="tamb-slider" min="0" max="40" step="1" value="20">
+        </div>
+        <div class="control-group">
+          <div class="control-label"><span>Temperatura Objetivo T_obj (°C)</span><span class="control-value" id="tobj-val">25</span></div>
+          <input type="range" id="tobj-slider" min="21" max="44" step="1" value="25">
+        </div>
+        <div class="control-group">
+          <div class="control-label"><span>k conocida (5min→35°C)</span><span class="control-value" id="k2-val">auto</span></div>
+        </div>
+        <div class="btn-row">
+          <button class="btn-sim primary" onclick="sim2.start()">▶ SIMULAR</button>
+          <button class="btn-sim" id="sim2-pause" onclick="sim2.togglePause()">⏸ PAUSAR</button>
+          <button class="btn-sim danger" onclick="sim2.reset()">↺ RESET</button>
+        </div>
+      </div>
+    </div>
+    <div class="sim-grid-2">
+      <div class="panel">
+        <div class="panel-title">Visualización — Objeto Caliente 3D</div>
+        <div class="canvas-wrap"><canvas id="sim2-3d"></canvas></div>
+        <div class="timeline-bar"><div class="timeline-progress" id="sim2-timeline"></div></div>
+      </div>
+      <div class="panel">
+        <div class="panel-title">Curva de Enfriamiento</div>
+        <div class="chart-wrap"><canvas id="sim2-chart"></canvas></div>
+        <div class="status-row" style="margin-top:1rem">
+          <div class="indicator"><div class="indicator-dot ind-yellow"></div><span id="sim2-status">LISTO</span></div>
+        </div>
+      </div>
+    </div>
+    <div class="panel">
+      <div class="panel-title">Panel de Métricas en Tiempo Real</div>
+      <div class="metrics-grid">
+        <div class="metric-card"><div class="metric-label">Tiempo Transcurrido</div><div class="metric-value" id="m2-time" style="color:var(--cyan)">0<span class="metric-unit">min</span></div></div>
+        <div class="metric-card"><div class="metric-label">Temperatura Actual</div><div class="metric-value" id="m2-temp" style="color:var(--orange)">45<span class="metric-unit">°C</span></div></div>
+        <div class="metric-card"><div class="metric-label">Diferencia ΔT</div><div class="metric-value" id="m2-delta" style="color:var(--neon)">25<span class="metric-unit">°C</span></div></div>
+        <div class="metric-card"><div class="metric-label">Tiempo hasta objetivo</div><div class="metric-value" id="m2-result" style="color:var(--purple)">15.75<span class="metric-unit">min</span></div></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════
+     SIMULATOR 3: MEZCLAS
+════════════════════════════════════ -->
+<div id="sim-2" class="sim-page">
+  <div class="sim-header">
+    <button class="sim-back" onclick="showHome()">← VOLVER</button>
+    <div class="sim-title-wrap">
+      <div class="sim-number">CASO 03 · FACTOR INTEGRANTE</div>
+      <h2 class="sim-title">Mezclas — Balance de Masa</h2>
+      <p class="sim-subtitle">Tanque de 1000L con cloración dinámica</p>
+    </div>
+  </div>
+  <div class="sim-body">
+    <div class="sim-grid-2">
+      <div class="panel">
+        <div class="panel-title">Marco Teórico</div>
+        <div class="theory-text">
+          <p>Principio de conservación de masa: Acumulación = Entrada − Salida</p>
+          <div class="formula-block">dA/dt = R_e·C_e − (R_s/V)·A</div>
+          <p>Con R=10L/min, C=0.5kg/L, V=1000L → ecuación lineal:</p>
+          <div class="formula-block">dA/dt + 0.01A = 5</div>
+          <p>Factor integrante: μ(t) = e^(0.01t)</p>
+          <p>Solución: <strong>A(t) = 500(1 − e^(−0.01t))</strong></p>
+          <p>A(30) ≈ <strong>129.6 kg</strong></p>
+        </div>
+      </div>
+      <div class="panel">
+        <div class="panel-title">Parámetros de Simulación</div>
+        <div class="control-group">
+          <div class="control-label"><span>Volumen del Tanque (L)</span><span class="control-value" id="vol-val">1000</span></div>
+          <input type="range" id="vol-slider" min="200" max="2000" step="100" value="1000">
+        </div>
+        <div class="control-group">
+          <div class="control-label"><span>Concentración Entrada (kg/L)</span><span class="control-value" id="conc-val">0.50</span></div>
+          <input type="range" id="conc-slider" min="0.1" max="2.0" step="0.05" value="0.5">
+        </div>
+        <div class="control-group">
+          <div class="control-label"><span>Caudal (L/min)</span><span class="control-value" id="flow-val">10</span></div>
+          <input type="range" id="flow-slider" min="1" max="50" step="1" value="10">
+        </div>
+        <div class="control-group">
+          <div class="control-label"><span>Tiempo de Simulación (min)</span><span class="control-value" id="tmax-val">60</span></div>
+          <input type="range" id="tmax-slider" min="10" max="200" step="10" value="60">
+        </div>
+        <div class="btn-row">
+          <button class="btn-sim primary" onclick="sim3.start()">▶ SIMULAR</button>
+          <button class="btn-sim" id="sim3-pause" onclick="sim3.togglePause()">⏸ PAUSAR</button>
+          <button class="btn-sim danger" onclick="sim3.reset()">↺ RESET</button>
+        </div>
+      </div>
+    </div>
+    <div class="sim-grid-2">
+      <div class="panel">
+        <div class="panel-title">Visualización — Tanque 3D</div>
+        <div class="canvas-wrap"><canvas id="sim3-3d"></canvas></div>
+        <div class="timeline-bar"><div class="timeline-progress" id="sim3-timeline"></div></div>
+      </div>
+      <div class="panel">
+        <div class="panel-title">Concentración vs Tiempo</div>
+        <div class="chart-wrap"><canvas id="sim3-chart"></canvas></div>
+        <div class="status-row" style="margin-top:1rem">
+          <div class="indicator"><div class="indicator-dot ind-blue"></div><span id="sim3-status">LISTO</span></div>
+        </div>
+      </div>
+    </div>
+    <div class="panel">
+      <div class="panel-title">Panel de Métricas en Tiempo Real</div>
+      <div class="metrics-grid">
+        <div class="metric-card"><div class="metric-label">Tiempo (min)</div><div class="metric-value" id="m3-time" style="color:var(--cyan)">0</div></div>
+        <div class="metric-card"><div class="metric-label">Cloro en Tanque</div><div class="metric-value" id="m3-mass" style="color:var(--neon)">0<span class="metric-unit">kg</span></div></div>
+        <div class="metric-card"><div class="metric-label">Concentración</div><div class="metric-value" id="m3-conc" style="color:var(--electric)">0<span class="metric-unit">kg/L</span></div></div>
+        <div class="metric-card"><div class="metric-label">A(30 min)</div><div class="metric-value" id="m3-result" style="color:var(--orange)">129.6<span class="metric-unit">kg</span></div></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════
+     SIMULATOR 4: CIRCUITO RC
+════════════════════════════════════ -->
+<div id="sim-3" class="sim-page">
+  <div class="sim-header">
+    <button class="sim-back" onclick="showHome()">← VOLVER</button>
+    <div class="sim-title-wrap">
+      <div class="sim-number">CASO 04 · ECUACIÓN LINEAL</div>
+      <h2 class="sim-title">Circuito RC — Kirchhoff</h2>
+      <p class="sim-subtitle">Carga del condensador R=1kΩ, C=1mF, E=12V</p>
+    </div>
+  </div>
+  <div class="sim-body">
+    <div class="sim-grid-2">
+      <div class="panel">
+        <div class="panel-title">Marco Teórico</div>
+        <div class="theory-text">
+          <p>Segunda Ley de Kirchhoff: la suma de caídas de voltaje = voltaje fuente:</p>
+          <div class="formula-block">R·dq/dt + q/C = E</div>
+          <p>Reordenando: dq/dt + q/(RC) = E/R</p>
+          <p>Con τ = RC = 1s, Q_max = CE = 0.012C:</p>
+          <div class="formula-block">q(t) = Q_max(1 − e^(−t/τ))</div>
+          <p>q(2) = 0.012(1 − e⁻²) ≈ <strong>0.01038 C</strong></p>
+        </div>
+      </div>
+      <div class="panel">
+        <div class="panel-title">Parámetros de Simulación</div>
+        <div class="control-group">
+          <div class="control-label"><span>Resistencia R (Ω)</span><span class="control-value" id="R-val">1000</span></div>
+          <input type="range" id="R-slider" min="100" max="5000" step="100" value="1000">
+        </div>
+        <div class="control-group">
+          <div class="control-label"><span>Capacitancia C (mF)</span><span class="control-value" id="C-val">1.0</span></div>
+          <input type="range" id="C-slider" min="0.1" max="10" step="0.1" value="1.0">
+        </div>
+        <div class="control-group">
+          <div class="control-label"><span>Voltaje Fuente E (V)</span><span class="control-value" id="E-val">12</span></div>
+          <input type="range" id="E-slider" min="1" max="48" step="1" value="12">
+        </div>
+        <div class="control-group">
+          <div class="control-label"><span>Tiempo evaluado (s)</span><span class="control-value" id="trc-val">2</span></div>
+          <input type="range" id="trc-slider" min="0.5" max="10" step="0.5" value="2">
+        </div>
+        <div class="btn-row">
+          <button class="btn-sim primary" onclick="sim4.start()">▶ SIMULAR</button>
+          <button class="btn-sim" id="sim4-pause" onclick="sim4.togglePause()">⏸ PAUSAR</button>
+          <button class="btn-sim danger" onclick="sim4.reset()">↺ RESET</button>
+        </div>
+      </div>
+    </div>
+    <div class="sim-grid-2">
+      <div class="panel">
+        <div class="panel-title">Diagrama Circuito Animado</div>
+        <div class="canvas-wrap"><canvas id="sim4-3d"></canvas></div>
+        <div class="timeline-bar"><div class="timeline-progress" id="sim4-timeline"></div></div>
+      </div>
+      <div class="panel">
+        <div class="panel-title">Carga q(t) vs Tiempo</div>
+        <div class="chart-wrap"><canvas id="sim4-chart"></canvas></div>
+        <div class="status-row" style="margin-top:1rem">
+          <div class="indicator"><div class="indicator-dot ind-blue"></div><span id="sim4-status">LISTO</span></div>
+        </div>
+      </div>
+    </div>
+    <div class="panel">
+      <div class="panel-title">Panel de Métricas en Tiempo Real</div>
+      <div class="metrics-grid">
+        <div class="metric-card"><div class="metric-label">Tiempo (s)</div><div class="metric-value" id="m4-time" style="color:var(--cyan)">0</div></div>
+        <div class="metric-card"><div class="metric-label">Carga q(t)</div><div class="metric-value" id="m4-charge" style="color:var(--electric)">0<span class="metric-unit">mC</span></div></div>
+        <div class="metric-card"><div class="metric-label">Voltaje Capacitor</div><div class="metric-value" id="m4-volt" style="color:var(--neon)">0<span class="metric-unit">V</span></div></div>
+        <div class="metric-card"><div class="metric-label">Carga en t evaluado</div><div class="metric-value" id="m4-result" style="color:var(--orange)">10.38<span class="metric-unit">mC</span></div></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════
+     SIMULATOR 5: VIDA MEDIA
+════════════════════════════════════ -->
+<div id="sim-4" class="sim-page">
+  <div class="sim-header">
+    <button class="sim-back" onclick="showHome()">← VOLVER</button>
+    <div class="sim-title-wrap">
+      <div class="sim-number">CASO 05 · DECAIMIENTO EXPONENCIAL</div>
+      <h2 class="sim-title">Vida Media del Aceite</h2>
+      <p class="sim-subtitle">Degradación de aceite sintético — vida media 3000 km</p>
+    </div>
+  </div>
+  <div class="sim-body">
+    <div class="sim-grid-2">
+      <div class="panel">
+        <div class="panel-title">Marco Teórico</div>
+        <div class="theory-text">
+          <p>La pérdida de eficiencia es proporcional a la integridad actual:</p>
+          <div class="formula-block">dL/dt = −k·L</div>
+          <p>Solución con L(0) = 100%: <strong>L(t) = 100·e^(−kt)</strong></p>
+          <p>De la vida media: L(3000) = 50 → k = ln(2)/3000</p>
+          <div class="formula-block">L(t) = 100 · 2^(−t/3000)</div>
+          <p>L(5000) = 100 · 2^(−5/3) ≈ <strong>31.5%</strong></p>
+        </div>
+      </div>
+      <div class="panel">
+        <div class="panel-title">Parámetros de Simulación</div>
+        <div class="control-group">
+          <div class="control-label"><span>Vida Media (km)</span><span class="control-value" id="halflife-val">3000</span></div>
+          <input type="range" id="halflife-slider" min="500" max="10000" step="250" value="3000">
+        </div>
+        <div class="control-group">
+          <div class="control-label"><span>Kilómetros Evaluados</span><span class="control-value" id="km-val">5000</span></div>
+          <input type="range" id="km-slider" min="1000" max="20000" step="500" value="5000">
+        </div>
+        <div class="control-group">
+          <div class="control-label"><span>Umbral de Cambio (%)</span><span class="control-value" id="thresh-val">20</span></div>
+          <input type="range" id="thresh-slider" min="10" max="50" step="5" value="20">
+        </div>
+        <div class="control-group">
+          <div class="control-label"><span>Velocidad de avance</span><span class="control-value" id="oilspeed-val">2x</span></div>
+          <input type="range" id="oilspeed-slider" min="1" max="10" step="1" value="2">
+        </div>
+        <div class="btn-row">
+          <button class="btn-sim primary" onclick="sim5.start()">▶ SIMULAR</button>
+          <button class="btn-sim" id="sim5-pause" onclick="sim5.togglePause()">⏸ PAUSAR</button>
+          <button class="btn-sim danger" onclick="sim5.reset()">↺ RESET</button>
+        </div>
+      </div>
+    </div>
+    <div class="sim-grid-2">
+      <div class="panel">
+        <div class="panel-title">Visualización — Motor 3D</div>
+        <div class="canvas-wrap"><canvas id="sim5-3d"></canvas></div>
+        <div class="timeline-bar"><div class="timeline-progress" id="sim5-timeline"></div></div>
+      </div>
+      <div class="panel">
+        <div class="panel-title">Degradación vs Kilómetros</div>
+        <div class="chart-wrap"><canvas id="sim5-chart"></canvas></div>
+        <div class="status-row" style="margin-top:1rem">
+          <div class="indicator"><div class="indicator-dot ind-green"></div><span id="sim5-status">LISTO</span></div>
+        </div>
+      </div>
+    </div>
+    <div class="panel">
+      <div class="panel-title">Panel de Métricas en Tiempo Real</div>
+      <div class="metrics-grid">
+        <div class="metric-card"><div class="metric-label">Kilómetros</div><div class="metric-value" id="m5-km" style="color:var(--cyan)">0</div></div>
+        <div class="metric-card"><div class="metric-label">Vida Útil Restante</div><div class="metric-value" id="m5-life" style="color:var(--neon)">100<span class="metric-unit">%</span></div></div>
+        <div class="metric-card"><div class="metric-label">Estado del Aceite</div><div class="metric-value" id="m5-state" style="color:var(--electric); font-size:1rem">ÓPTIMO</div></div>
+        <div class="metric-card"><div class="metric-label">Vida en km evaluado</div><div class="metric-value" id="m5-result" style="color:var(--orange)">31.5<span class="metric-unit">%</span></div></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Tutorial Modal -->
+<div id="tutorial-modal">
+  <div class="tutorial-box">
+    <button class="tutorial-close" onclick="closeTutorial()">×</button>
+    <div class="tutorial-title">📖 Tutorial Rápido</div>
+    <div class="tutorial-step active" id="ts-0">
+      <div class="tutorial-step-text"><strong>Bienvenido a EcuaDyn</strong><br><br>Esta plataforma contiene 5 simuladores interactivos basados en ecuaciones diferenciales de primer orden. Cada módulo resuelve un problema real usando métodos analíticos.</div>
+      <div class="tutorial-nav"><button class="btn-sim primary" onclick="tutorialStep(1)">SIGUIENTE →</button></div>
+    </div>
+    <div class="tutorial-step" id="ts-1">
+      <div class="tutorial-step-text"><strong>Cómo usar los simuladores</strong><br><br>1. Ajusta los <em>parámetros</em> con los sliders.<br>2. Pulsa <em>▶ SIMULAR</em> para iniciar.<br>3. Observa la animación 3D y la gráfica en tiempo real.<br>4. Usa ⏸ para pausar y ↺ para reiniciar.</div>
+      <div class="tutorial-nav"><button class="btn-sim" onclick="tutorialStep(0)">← ATRÁS</button><button class="btn-sim primary" onclick="tutorialStep(2)">SIGUIENTE →</button></div>
+    </div>
+    <div class="tutorial-step" id="ts-2">
+      <div class="tutorial-step-text"><strong>Métricas en tiempo real</strong><br><br>El panel inferior muestra las variables calculadas en cada instante usando la solución analítica exacta de la ecuación diferencial. Los valores se actualizan dinámicamente durante la simulación.</div>
+      <div class="tutorial-nav"><button class="btn-sim" onclick="tutorialStep(1)">← ATRÁS</button><button class="btn-sim primary" onclick="closeTutorial()">¡ENTENDIDO!</button></div>
+    </div>
+  </div>
+</div>
+
+<!-- Footer -->
+<footer id="main-footer">
+  <div class="footer-logo">EcuaDyn</div>
+  <div class="footer-divider"></div>
+  <div class="footer-info">
+    TRABAJO FINAL — ECUACIONES DIFERENCIALES<br>
+    Ingeniería de Software · Universidad · 2026<br><br>
+    Métodos: Variables Separables · Factor Integrante · Ecuaciones Lineales<br>
+    Stack: Three.js · Chart.js · GSAP · MathJax · JavaScript ES2023
+  </div>
+</footer>
+
+<script>
+// ═══════════════════════════════════════════════════
+// CURSOR
+// ═══════════════════════════════════════════════════
+const cursor = document.getElementById('cursor');
+const cursorRing = document.getElementById('cursor-ring');
+let mx=0, my=0, rx=0, ry=0;
+document.addEventListener('mousemove', e => { mx=e.clientX; my=e.clientY; cursor.style.left=mx+'px'; cursor.style.top=my+'px'; });
+(function animCursor(){
+  rx += (mx-rx)*0.15; ry += (my-ry)*0.15;
+  cursorRing.style.left=rx+'px'; cursorRing.style.top=ry+'px';
+  requestAnimationFrame(animCursor);
+})();
+
+// ═══════════════════════════════════════════════════
+// PARTICLE SYSTEM
+// ═══════════════════════════════════════════════════
+(function initParticles(){
+  const canvas = document.getElementById('particle-canvas');
+  const ctx = canvas.getContext('2d');
+  let W, H, particles=[];
+  function resize(){ W=canvas.width=window.innerWidth; H=canvas.height=window.innerHeight; }
+  resize(); window.addEventListener('resize',resize);
+  for(let i=0;i<80;i++) particles.push({
+    x:Math.random()*2000,y:Math.random()*2000,
+    vx:(Math.random()-.5)*0.3,vy:(Math.random()-.5)*0.3,
+    r:Math.random()*2+0.5, life:Math.random()
+  });
+  function draw(){
+    ctx.clearRect(0,0,W,H);
+    particles.forEach(p=>{
+      p.x+=p.vx; p.y+=p.vy; p.life+=0.003;
+      if(p.x<0||p.x>W)p.vx*=-1;
+      if(p.y<0||p.y>H)p.vy*=-1;
+      const a = Math.sin(p.life)*0.6+0.1;
+      ctx.beginPath(); ctx.arc(p.x,p.y,p.r,0,Math.PI*2);
+      ctx.fillStyle=`rgba(0,200,255,${a})`; ctx.fill();
+    });
+    // connect nearby
+    for(let i=0;i<particles.length;i++){
+      for(let j=i+1;j<particles.length;j++){
+        const dx=particles[i].x-particles[j].x, dy=particles[i].y-particles[j].y;
+        const d=Math.sqrt(dx*dx+dy*dy);
+        if(d<120){
+          ctx.beginPath(); ctx.moveTo(particles[i].x,particles[i].y); ctx.lineTo(particles[j].x,particles[j].y);
+          ctx.strokeStyle=`rgba(0,200,255,${(1-d/120)*0.15})`; ctx.lineWidth=0.5; ctx.stroke();
+        }
+      }
+    }
+    requestAnimationFrame(draw);
+  }
+  draw();
+})();
+
+// ═══════════════════════════════════════════════════
+// HERO 3D BACKGROUND (Three.js)
+// ═══════════════════════════════════════════════════
+(function initHero3D(){
+  const canvas = document.getElementById('hero-canvas');
+  const renderer = new THREE.WebGLRenderer({canvas, alpha:true, antialias:true});
+  renderer.setPixelRatio(window.devicePixelRatio);
+  renderer.setSize(canvas.offsetWidth||window.innerWidth, canvas.offsetHeight||window.innerHeight);
+  const scene = new THREE.Scene();
+  const camera = new THREE.PerspectiveCamera(60, canvas.offsetWidth/canvas.offsetHeight||1, 0.1, 1000);
+  camera.position.z = 5;
+  // Wireframe torus knot
+  const geo = new THREE.TorusKnotGeometry(2, 0.4, 128, 16);
+  const mat = new THREE.MeshBasicMaterial({color:0x00d4ff, wireframe:true, opacity:0.08, transparent:true});
+  const mesh = new THREE.Mesh(geo, mat);
+  scene.add(mesh);
+  // Icosahedron
+  const geo2 = new THREE.IcosahedronGeometry(3, 1);
+  const mat2 = new THREE.MeshBasicMaterial({color:0x1a90ff, wireframe:true, opacity:0.04, transparent:true});
+  const mesh2 = new THREE.Mesh(geo2, mat2);
+  scene.add(mesh2);
+  let animId;
+  function animate(){
+    animId=requestAnimationFrame(animate);
+    mesh.rotation.x+=0.003; mesh.rotation.y+=0.005;
+    mesh2.rotation.y-=0.002; mesh2.rotation.z+=0.001;
+    renderer.render(scene,camera);
+  }
+  animate();
+  window.addEventListener('resize', ()=>{
+    const w=canvas.offsetWidth, h=canvas.offsetHeight;
+    renderer.setSize(w,h); camera.aspect=w/h; camera.updateProjectionMatrix();
+  });
+})();
+
+// ═══════════════════════════════════════════════════
+// LOADING SCREEN
+// ═══════════════════════════════════════════════════
+const loaderMsgs = [
+  'INICIALIZANDO MOTORES...','CARGANDO THREE.JS...','COMPILANDO SHADERS...',
+  'PREPARANDO ECUACIONES...','CALIBRANDO SIMULADORES...','SISTEMA LISTO'
+];
+let li=0, lp=0;
+const lbar = document.getElementById('loader-bar');
+const ltxt = document.getElementById('loader-text');
+const linterval = setInterval(()=>{
+  lp += Math.random()*18+5;
+  if(lp>100)lp=100;
+  lbar.style.width=lp+'%';
+  li = Math.floor(lp/20); if(li>=loaderMsgs.length)li=loaderMsgs.length-1;
+  ltxt.textContent=loaderMsgs[li];
+  if(lp>=100){
+    clearInterval(linterval);
+    setTimeout(()=>{
+      gsap.to('#loader',{opacity:0,duration:0.8,onComplete:()=>{ document.getElementById('loader').style.display='none'; initAnimations(); }});
+    },400);
+  }
+},80);
+
+// ═══════════════════════════════════════════════════
+// GSAP ENTRANCE ANIMATIONS
+// ═══════════════════════════════════════════════════
+function initAnimations(){
+  gsap.to('.hero-badge',{opacity:1,y:0,duration:0.8,delay:0.2});
+  gsap.to('.hero-title',{opacity:1,duration:1,delay:0.4});
+  gsap.to('.hero-sub',{opacity:1,duration:0.8,delay:0.7});
+  gsap.to('.hero-actions',{opacity:1,y:0,duration:0.8,delay:0.9});
+  gsap.to('.hero-stat',{opacity:1,duration:0.6,stagger:0.15,delay:1.1});
+  // Module cards scroll animation
+  gsap.registerPlugin(ScrollTrigger);
+  gsap.utils.toArray('.module-card').forEach((card,i)=>{
+    gsap.to(card,{opacity:1,y:0,duration:0.7,delay:i*0.1,scrollTrigger:{trigger:card,start:'top 85%'}});
+  });
+}
+
+// ═══════════════════════════════════════════════════
+// PAGE NAVIGATION
+// ═══════════════════════════════════════════════════
+function showHome(){
+  document.getElementById('home-page').style.display='block';
+  document.getElementById('main-footer').style.display='block';
+  [0,1,2,3,4].forEach(i=>{ const p=document.getElementById('sim-'+i); if(p)p.classList.remove('active'); });
+  document.querySelectorAll('.nav-links a').forEach(a=>a.classList.remove('active'));
+  document.getElementById('nav-home').classList.add('active');
+  window.scrollTo(0,0);
+}
+function showSim(idx){
+  document.getElementById('home-page').style.display='none';
+  document.getElementById('main-footer').style.display='none';
+  [0,1,2,3,4].forEach(i=>{ const p=document.getElementById('sim-'+i); if(p)p.classList.remove('active'); });
+  const page=document.getElementById('sim-'+idx);
+  if(page){
+    page.classList.add('active');
+    gsap.fromTo(page,{opacity:0,y:20},{opacity:1,y:0,duration:0.5});
+  }
+  document.querySelectorAll('.nav-links a').forEach(a=>a.classList.remove('active'));
+  const navEl=document.getElementById('nav-'+idx);
+  if(navEl)navEl.classList.add('active');
+  window.scrollTo(0,0);
+  // Init 3D for the sim if needed
+  setTimeout(()=>simInits[idx] && !simInited[idx] && (simInited[idx]=true, simInits[idx]()), 100);
+}
+const simInits = [initSim1_3D, initSim2_3D, initSim3_3D, initSim4_3D, initSim5_3D];
+const simInited = [false,false,false,false,false];
+
+// Tutorial
+let tutStep=0;
+function openTutorial(){ document.getElementById('tutorial-modal').classList.add('open'); tutorialStep(0); }
+function closeTutorial(){ document.getElementById('tutorial-modal').classList.remove('open'); }
+function tutorialStep(n){
+  document.querySelectorAll('.tutorial-step').forEach((s,i)=>s.classList.toggle('active',i===n));
+  tutStep=n;
+}
+
+// Slider sync helper
+function bindSlider(id,valId,fmt){
+  const sl=document.getElementById(id), vl=document.getElementById(valId);
+  if(!sl||!vl)return;
+  function up(){ vl.textContent=fmt?fmt(sl.value):sl.value; const pct=(sl.value-sl.min)/(sl.max-sl.min)*100; sl.style.background=`linear-gradient(90deg,var(--cyan) ${pct}%,var(--bg3) ${pct}%)`; }
+  sl.addEventListener('input',up); up();
+}
+// Will be called after page load
+
+// ═══════════════════════════════════════════════════
+// CHART FACTORY
+// ═══════════════════════════════════════════════════
+function makeChart(canvasId, label, color, color2){
+  const ctx=document.getElementById(canvasId).getContext('2d');
+  return new Chart(ctx,{
+    type:'line',
+    data:{labels:[],datasets:[{label,data:[],borderColor:color||'#00d4ff',backgroundColor:(color2||'rgba(0,212,255,0.08)'),borderWidth:2.5,pointRadius:0,tension:0.4,fill:true}]},
+    options:{
+      animation:{duration:0},
+      responsive:true,maintainAspectRatio:false,
+      plugins:{legend:{display:false},tooltip:{enabled:true,backgroundColor:'rgba(0,5,20,0.9)',titleColor:'#00d4ff',bodyColor:'#e2eeff',borderColor:'rgba(0,212,255,0.3)',borderWidth:1}},
+      scales:{
+        x:{ticks:{color:'#3a6080',font:{family:'Space Mono',size:10}},grid:{color:'rgba(0,212,255,0.05)'}},
+        y:{ticks:{color:'#3a6080',font:{family:'Space Mono',size:10}},grid:{color:'rgba(0,212,255,0.05)'}}
+      }
+    }
+  });
+}
+
+// ═══════════════════════════════════════════════════
+// SIMULATOR 1 — POBLACIÓN
+// ═══════════════════════════════════════════════════
+let sim1Chart=null;
+function initSim1_3D(){
+  sim1Chart=makeChart('sim1-chart','Población (M)','#00d4ff','rgba(0,212,255,0.08)');
+  // 3D Globe
+  const canvas=document.getElementById('sim1-3d');
+  const renderer=new THREE.WebGLRenderer({canvas,alpha:true,antialias:true});
+  renderer.setSize(canvas.offsetWidth,canvas.offsetHeight);
+  const scene=new THREE.Scene();
+  const camera=new THREE.PerspectiveCamera(50,canvas.offsetWidth/canvas.offsetHeight,0.1,100);
+  camera.position.set(0,0,3);
+  const geo=new THREE.SphereGeometry(1,32,32);
+  const mat=new THREE.MeshPhongMaterial({color:0x0a1a3a,emissive:0x001122,wireframe:false,opacity:0.9,transparent:true});
+  const globe=new THREE.Mesh(geo,mat); scene.add(globe);
+  const wireGeo=new THREE.SphereGeometry(1.01,20,20);
+  const wireMat=new THREE.MeshBasicMaterial({color:0x00d4ff,wireframe:true,opacity:0.15,transparent:true});
+  const wire=new THREE.Mesh(wireGeo,wireMat); scene.add(wire);
+  const light=new THREE.PointLight(0x00d4ff,2,10); light.position.set(3,3,3); scene.add(light);
+  scene.add(new THREE.AmbientLight(0x112244,1));
+  // People dots
+  const dotsGeo=new THREE.BufferGeometry();
+  const dots=[]; for(let i=0;i<200;i++){
+    const phi=Math.acos(-1+2*Math.random()), theta=2*Math.PI*Math.random();
+    const r=1.05;
+    dots.push(r*Math.sin(phi)*Math.cos(theta),r*Math.sin(phi)*Math.sin(theta),r*Math.cos(phi));
+  }
+  dotsGeo.setAttribute('position',new THREE.Float32BufferAttribute(dots,3));
+  const dotsMat=new THREE.PointsMaterial({color:0x00ffaa,size:0.03,opacity:0.7,transparent:true});
+  const points=new THREE.Points(dotsGeo,dotsMat); scene.add(points);
+  sim1_renderer={renderer,scene,camera,globe,wire,points};
+  let anim; function loop(){ anim=requestAnimationFrame(loop); globe.rotation.y+=0.005; wire.rotation.y+=0.005; points.rotation.y+=0.005; renderer.render(scene,camera); }
+  loop();
+  window.addEventListener('resize',()=>{ const w=canvas.offsetWidth,h=canvas.offsetHeight; renderer.setSize(w,h); camera.aspect=w/h; camera.updateProjectionMatrix(); });
+
+  // Bind sliders
+  bindSlider('p0-slider','p0-val');
+  bindSlider('k-slider','k-val',v=>parseFloat(v).toFixed(3));
+  bindSlider('year0-slider','year0-val');
+  bindSlider('tyears-slider','tyears-val');
+  document.getElementById('p0-slider').addEventListener('input',()=>sim1.updateResult());
+  document.getElementById('k-slider').addEventListener('input',()=>sim1.updateResult());
+  document.getElementById('year0-slider').addEventListener('input',()=>sim1.updateResult());
+  document.getElementById('tyears-slider').addEventListener('input',()=>sim1.updateResult());
+  sim1.updateResult();
+}
+let sim1_renderer={};
+const sim1={
+  running:false,paused:false,t:0,anim:null,
+  getParams(){ return {P0:+document.getElementById('p0-slider').value, k:+document.getElementById('k-slider').value, y0:+document.getElementById('year0-slider').value, T:+document.getElementById('tyears-slider').value}; },
+  P(t,p){ return p.P0*Math.exp(p.k*t); },
+  updateResult(){
+    const p=this.getParams(), result=this.P(p.T,p);
+    document.getElementById('m1-result').innerHTML=result.toFixed(2)+'<span class="metric-unit">M</span>';
+    document.getElementById('m1-year').textContent=p.y0;
+    document.getElementById('m1-pop').innerHTML=p.P0.toFixed(2)+'<span class="metric-unit">M</span>';
+  },
+  start(){
+    if(this.running) return;
+    this.reset(); this.running=true; this.paused=false;
+    document.getElementById('sim1-status').textContent='SIMULANDO';
+    const p=this.getParams(); const steps=120; let i=0;
+    if(sim1Chart){ sim1Chart.data.labels=[]; sim1Chart.data.datasets[0].data=[]; sim1Chart.update(); }
+    this.anim=setInterval(()=>{
+      if(this.paused)return;
+      const t=i/steps*p.T; const pop=this.P(t,p);
+      if(sim1Chart){ sim1Chart.data.labels.push((p.y0+t).toFixed(1)); sim1Chart.data.datasets[0].data.push(pop.toFixed(3)); if(sim1Chart.data.labels.length>80){sim1Chart.data.labels.shift();sim1Chart.data.datasets[0].data.shift();} sim1Chart.update(); }
+      document.getElementById('m1-year').textContent=(p.y0+t).toFixed(1);
+      document.getElementById('m1-pop').innerHTML=pop.toFixed(2)+'<span class="metric-unit">M</span>';
+      const delta=this.P(t+0.1,p)-pop; document.getElementById('m1-delta').innerHTML=delta.toFixed(3)+'<span class="metric-unit">M/año</span>';
+      document.getElementById('sim1-timeline').style.width=(i/steps*100)+'%';
+      // Scale globe
+      if(sim1_renderer.globe){ const s=0.8+0.4*(pop/100); sim1_renderer.globe.scale.setScalar(Math.min(s,1.5)); }
+      i++; if(i>steps){ clearInterval(this.anim); this.running=false; document.getElementById('sim1-status').textContent='COMPLETADO'; }
+    },60);
+  },
+  togglePause(){ this.paused=!this.paused; document.getElementById('sim1-pause').textContent=this.paused?'▶ REANUDAR':'⏸ PAUSAR'; document.getElementById('sim1-status').textContent=this.paused?'PAUSADO':'SIMULANDO'; },
+  reset(){ clearInterval(this.anim); this.running=false; this.paused=false; document.getElementById('sim1-status').textContent='LISTO'; document.getElementById('sim1-timeline').style.width='0%'; document.getElementById('sim1-pause').textContent='⏸ PAUSAR'; if(sim1Chart){sim1Chart.data.labels=[];sim1Chart.data.datasets[0].data=[];sim1Chart.update();} if(sim1_renderer.globe)sim1_renderer.globe.scale.setScalar(1); this.updateResult(); }
+};
+
+// ═══════════════════════════════════════════════════
+// SIMULATOR 2 — TEMPERATURA
+// ═══════════════════════════════════════════════════
+let sim2Chart=null, sim2_renderer={};
+function initSim2_3D(){
+  sim2Chart=makeChart('sim2-chart','Temperatura (°C)','#ff6b2b','rgba(255,107,43,0.08)');
+  const canvas=document.getElementById('sim2-3d');
+  const renderer=new THREE.WebGLRenderer({canvas,alpha:true,antialias:true});
+  renderer.setSize(canvas.offsetWidth,canvas.offsetHeight);
+  const scene=new THREE.Scene();
+  const camera=new THREE.PerspectiveCamera(50,canvas.offsetWidth/canvas.offsetHeight,0.1,100);
+  camera.position.set(0,0,4);
+  // Phone mesh
+  const geo=new THREE.BoxGeometry(1.2,2.2,0.15);
+  const mat=new THREE.MeshPhongMaterial({color:0xff6600,emissive:0x441100});
+  const phone=new THREE.Mesh(geo,mat); scene.add(phone);
+  // Screen
+  const sGeo=new THREE.PlaneGeometry(1,2);
+  const sMat=new THREE.MeshBasicMaterial({color:0x002244});
+  const screen=new THREE.Mesh(sGeo,sMat); screen.position.z=0.09; scene.add(screen);
+  const pLight=new THREE.PointLight(0xff4400,3,10); pLight.position.set(0,0,3); scene.add(pLight);
+  scene.add(new THREE.AmbientLight(0x112244,1));
+  sim2_renderer={renderer,scene,camera,phone,screen,pLight};
+  function loop(){ requestAnimationFrame(loop); phone.rotation.y=Math.sin(Date.now()/2000)*0.3; renderer.render(scene,camera); }
+  loop();
+  bindSlider('t0-slider','t0-val'); bindSlider('tamb-slider','tamb-val'); bindSlider('tobj-slider','tobj-val');
+  document.getElementById('t0-slider').addEventListener('input',()=>sim2.updateResult());
+  document.getElementById('tamb-slider').addEventListener('input',()=>sim2.updateResult());
+  document.getElementById('tobj-slider').addEventListener('input',()=>sim2.updateResult());
+  sim2.updateResult();
+}
+const sim2={
+  running:false,paused:false,anim:null,
+  getParams(){ return {T0:+document.getElementById('t0-slider').value, Tamb:+document.getElementById('tamb-slider').value, Tobj:+document.getElementById('tobj-slider').value}; },
+  T(t,p){ const k=Math.log(0.6)/5; return p.Tamb+(p.T0-p.Tamb)*Math.exp(k*t); },
+  timeToObj(p){ const k=Math.log(0.6)/5; const ratio=(p.Tobj-p.Tamb)/(p.T0-p.Tamb); if(ratio<=0||ratio>=1)return null; return Math.log(ratio)/k; },
+  updateResult(){
+    const p=this.getParams(); const t=this.timeToObj(p);
+    document.getElementById('m2-result').innerHTML=(t?t.toFixed(2):'N/A')+'<span class="metric-unit">min</span>';
+    document.getElementById('m2-temp').innerHTML=p.T0+'<span class="metric-unit">°C</span>';
+    document.getElementById('m2-delta').innerHTML=(p.T0-p.Tamb).toFixed(1)+'<span class="metric-unit">°C</span>';
+  },
+  start(){
+    if(this.running)return; this.reset(); this.running=true; this.paused=false;
+    document.getElementById('sim2-status').textContent='ENFRIANDO';
+    const p=this.getParams(); const tmax=30; const steps=120; let i=0;
+    if(sim2Chart){sim2Chart.data.labels=[];sim2Chart.data.datasets[0].data=[];sim2Chart.update();}
+    this.anim=setInterval(()=>{
+      if(this.paused)return;
+      const t=i/steps*tmax; const temp=this.T(t,p);
+      if(sim2Chart){sim2Chart.data.labels.push(t.toFixed(1));sim2Chart.data.datasets[0].data.push(temp.toFixed(2));if(sim2Chart.data.labels.length>80){sim2Chart.data.labels.shift();sim2Chart.data.datasets[0].data.shift();}sim2Chart.update();}
+      document.getElementById('m2-time').innerHTML=t.toFixed(1)+'<span class="metric-unit">min</span>';
+      document.getElementById('m2-temp').innerHTML=temp.toFixed(1)+'<span class="metric-unit">°C</span>';
+      document.getElementById('m2-delta').innerHTML=(temp-p.Tamb).toFixed(1)+'<span class="metric-unit">°C</span>';
+      document.getElementById('sim2-timeline').style.width=(i/steps*100)+'%';
+      // Color phone by temp
+      if(sim2_renderer.phone){
+        const ratio=(temp-p.Tamb)/(p.T0-p.Tamb);
+        const r=Math.floor(50+ratio*180), g=Math.floor(20+ratio*30), b=20;
+        sim2_renderer.phone.material.color.setRGB(r/255,g/255,b/255);
+        sim2_renderer.phone.material.emissive.setRGB(ratio*0.3,0,0);
+        sim2_renderer.pLight.intensity=1+ratio*3;
+        sim2_renderer.pLight.color.setRGB(1,ratio*0.3,0);
+      }
+      i++; if(i>steps){clearInterval(this.anim);this.running=false;document.getElementById('sim2-status').textContent='COMPLETADO';}
+    },60);
+  },
+  togglePause(){ this.paused=!this.paused; document.getElementById('sim2-pause').textContent=this.paused?'▶ REANUDAR':'⏸ PAUSAR'; document.getElementById('sim2-status').textContent=this.paused?'PAUSADO':'ENFRIANDO'; },
+  reset(){ clearInterval(this.anim);this.running=false;this.paused=false;document.getElementById('sim2-status').textContent='LISTO';document.getElementById('sim2-timeline').style.width='0%';document.getElementById('sim2-pause').textContent='⏸ PAUSAR';if(sim2Chart){sim2Chart.data.labels=[];sim2Chart.data.datasets[0].data=[];sim2Chart.update();}if(sim2_renderer.phone){sim2_renderer.phone.material.color.set(0xff6600);sim2_renderer.pLight.intensity=2;}this.updateResult(); }
+};
+
+// ═══════════════════════════════════════════════════
+// SIMULATOR 3 — MEZCLAS
+// ═══════════════════════════════════════════════════
+let sim3Chart=null, sim3_renderer={};
+function initSim3_3D(){
+  sim3Chart=makeChart('sim3-chart','Cloro (kg)','#00ffaa','rgba(0,255,170,0.08)');
+  const canvas=document.getElementById('sim3-3d');
+  const renderer=new THREE.WebGLRenderer({canvas,alpha:true,antialias:true});
+  renderer.setSize(canvas.offsetWidth,canvas.offsetHeight);
+  const scene=new THREE.Scene();
+  const camera=new THREE.PerspectiveCamera(50,canvas.offsetWidth/canvas.offsetHeight,0.1,100);
+  camera.position.set(0,1.5,5);
+  // Tank
+  const tankGeo=new THREE.CylinderGeometry(1.2,1.2,2.5,32,1,true);
+  const tankMat=new THREE.MeshBasicMaterial({color:0x001122,wireframe:false,side:THREE.BackSide,opacity:0.5,transparent:true});
+  const tank=new THREE.Mesh(tankGeo,tankMat); scene.add(tank);
+  const rimGeo=new THREE.TorusGeometry(1.2,0.04,8,32);
+  const rimMat=new THREE.MeshBasicMaterial({color:0x00d4ff}); 
+  const rim1=new THREE.Mesh(rimGeo,rimMat); rim1.position.y=1.25; scene.add(rim1);
+  const rim2=rim1.clone(); rim2.position.y=-1.25; scene.add(rim2);
+  // Water inside
+  const waterGeo=new THREE.CylinderGeometry(1.15,1.15,0.1,32);
+  const waterMat=new THREE.MeshPhongMaterial({color:0x003366,transparent:true,opacity:0.8});
+  const water=new THREE.Mesh(waterGeo,waterMat); water.position.y=-1.1; scene.add(water);
+  const pLight=new THREE.PointLight(0x00ffaa,2,10); pLight.position.set(0,3,2); scene.add(pLight);
+  scene.add(new THREE.AmbientLight(0x112244,1));
+  sim3_renderer={renderer,scene,camera,water,pLight};
+  function loop(){ requestAnimationFrame(loop); tank.rotation.y+=0.005; rim1.rotation.y+=0.005; rim2.rotation.y+=0.005; renderer.render(scene,camera); }
+  loop();
+  bindSlider('vol-slider','vol-val'); bindSlider('conc-slider','conc-val',v=>parseFloat(v).toFixed(2));
+  bindSlider('flow-slider','flow-val'); bindSlider('tmax-slider','tmax-val');
+  [['vol-slider'],['conc-slider'],['flow-slider'],['tmax-slider']].forEach(([id])=>document.getElementById(id).addEventListener('input',()=>sim3.updateResult()));
+  sim3.updateResult();
+}
+const sim3={
+  running:false,paused:false,anim:null,
+  getParams(){ return {V:+document.getElementById('vol-slider').value, Ce:+document.getElementById('conc-slider').value, R:+document.getElementById('flow-slider').value, T:+document.getElementById('tmax-slider').value}; },
+  A(t,p){ const a=p.R/p.V; return p.Ce*p.V*(1-Math.exp(-a*t)); },
+  updateResult(){ const p=this.getParams(); document.getElementById('m3-result').innerHTML=this.A(30,p).toFixed(1)+'<span class="metric-unit">kg</span>'; },
+  start(){
+    if(this.running)return; this.reset(); this.running=true; this.paused=false;
+    document.getElementById('sim3-status').textContent='MEZCLANDO';
+    const p=this.getParams(); const steps=120; let i=0;
+    if(sim3Chart){sim3Chart.data.labels=[];sim3Chart.data.datasets[0].data=[];sim3Chart.update();}
+    this.anim=setInterval(()=>{
+      if(this.paused)return;
+      const t=i/steps*p.T; const A=this.A(t,p); const Amax=p.Ce*p.V; const conc=A/p.V;
+      if(sim3Chart){sim3Chart.data.labels.push(t.toFixed(0));sim3Chart.data.datasets[0].data.push(A.toFixed(2));if(sim3Chart.data.labels.length>80){sim3Chart.data.labels.shift();sim3Chart.data.datasets[0].data.shift();}sim3Chart.update();}
+      document.getElementById('m3-time').textContent=t.toFixed(1);
+      document.getElementById('m3-mass').innerHTML=A.toFixed(1)+'<span class="metric-unit">kg</span>';
+      document.getElementById('m3-conc').innerHTML=conc.toFixed(4)+'<span class="metric-unit">kg/L</span>';
+      document.getElementById('sim3-timeline').style.width=(i/steps*100)+'%';
+      if(sim3_renderer.water){
+        const ratio=Math.min(A/Amax,1); const level=-1.2+2.4*Math.min(ratio*1.2,1);
+        sim3_renderer.water.position.y=Math.max(-1.2,level-0.05);
+        sim3_renderer.water.scale.y=Math.max(0.1,2.4*Math.min(ratio*1.5,1));
+        const g=Math.floor(ratio*140); const b=Math.floor(50+ratio*100);
+        sim3_renderer.water.material.color.setRGB(0,g/255,b/255);
+        sim3_renderer.pLight.color.setRGB(0,(0.3+ratio*0.7),ratio*0.5);
+      }
+      i++; if(i>steps){clearInterval(this.anim);this.running=false;document.getElementById('sim3-status').textContent='COMPLETADO';}
+    },60);
+  },
+  togglePause(){ this.paused=!this.paused; document.getElementById('sim3-pause').textContent=this.paused?'▶ REANUDAR':'⏸ PAUSAR'; document.getElementById('sim3-status').textContent=this.paused?'PAUSADO':'MEZCLANDO'; },
+  reset(){ clearInterval(this.anim);this.running=false;this.paused=false;document.getElementById('sim3-status').textContent='LISTO';document.getElementById('sim3-timeline').style.width='0%';document.getElementById('sim3-pause').textContent='⏸ PAUSAR';if(sim3Chart){sim3Chart.data.labels=[];sim3Chart.data.datasets[0].data=[];sim3Chart.update();}if(sim3_renderer.water){sim3_renderer.water.scale.y=0.1;sim3_renderer.water.position.y=-1.2;}this.updateResult(); }
+};
+
+// ═══════════════════════════════════════════════════
+// SIMULATOR 4 — CIRCUITO RC
+// ═══════════════════════════════════════════════════
+let sim4Chart=null, sim4_renderer={};
+function initSim4_3D(){
+  sim4Chart=makeChart('sim4-chart','Carga q (mC)','#1a90ff','rgba(26,144,255,0.08)');
+  const canvas=document.getElementById('sim4-3d');
+  const renderer=new THREE.WebGLRenderer({canvas,alpha:true,antialias:true});
+  renderer.setSize(canvas.offsetWidth,canvas.offsetHeight);
+  const scene=new THREE.Scene();
+  const camera=new THREE.PerspectiveCamera(50,canvas.offsetWidth/canvas.offsetHeight,0.1,100);
+  camera.position.set(0,0,5);
+  // Capacitor cylinders
+  const capGeo=new THREE.CylinderGeometry(0.4,0.4,0.8,32);
+  const capMat=new THREE.MeshPhongMaterial({color:0x0066cc,emissive:0x001133});
+  const cap=new THREE.Mesh(capGeo,capMat); cap.rotation.z=Math.PI/2; scene.add(cap);
+  // Resistor box
+  const resGeo=new THREE.BoxGeometry(1,0.4,0.4);
+  const resMat=new THREE.MeshPhongMaterial({color:0x884400});
+  const res=new THREE.Mesh(resGeo,resMat); res.position.set(0,2,0); scene.add(res);
+  // Circuit lines (wires)
+  const wireMat=new THREE.LineBasicMaterial({color:0x00d4ff,linewidth:2});
+  [[[-0.5,0,0],[-0.5,2,0]],[[ 0.5,0,0],[0.5,2,0]]].forEach(pts=>{
+    const geo=new THREE.BufferGeometry().setFromPoints(pts.map(p=>new THREE.Vector3(...p)));
+    scene.add(new THREE.Line(geo,wireMat));
+  });
+  // Glow sphere for charge
+  const glowGeo=new THREE.SphereGeometry(0.35,16,16);
+  const glowMat=new THREE.MeshBasicMaterial({color:0x1a90ff,opacity:0.2,transparent:true});
+  const glow=new THREE.Mesh(glowGeo,glowMat); glow.scale.setScalar(0); scene.add(glow);
+  const pLight=new THREE.PointLight(0x1a90ff,2,10); pLight.position.set(0,0,3); scene.add(pLight);
+  scene.add(new THREE.AmbientLight(0x112244,1));
+  sim4_renderer={renderer,scene,camera,cap,glow,pLight};
+  function loop(){ requestAnimationFrame(loop); cap.rotation.y+=0.01; renderer.render(scene,camera); }
+  loop();
+  bindSlider('R-slider','R-val'); bindSlider('C-slider','C-val',v=>parseFloat(v).toFixed(1));
+  bindSlider('E-slider','E-val'); bindSlider('trc-slider','trc-val');
+  [['R-slider'],['C-slider'],['E-slider'],['trc-slider']].forEach(([id])=>document.getElementById(id).addEventListener('input',()=>sim4.updateResult()));
+  sim4.updateResult();
+}
+const sim4={
+  running:false,paused:false,anim:null,
+  getParams(){ return {R:+document.getElementById('R-slider').value, C:+document.getElementById('C-slider').value/1000, E:+document.getElementById('E-slider').value, Teval:+document.getElementById('trc-slider').value}; },
+  q(t,p){ const tau=p.R*p.C; const Qmax=p.C*p.E; return Qmax*(1-Math.exp(-t/tau)); },
+  updateResult(){ const p=this.getParams(); document.getElementById('m4-result').innerHTML=(this.q(p.Teval,p)*1000).toFixed(3)+'<span class="metric-unit">mC</span>'; },
+  start(){
+    if(this.running)return; this.reset(); this.running=true; this.paused=false;
+    document.getElementById('sim4-status').textContent='CARGANDO';
+    const p=this.getParams(); const tau=p.R*p.C; const tmax=tau*5; const steps=120; let i=0;
+    const Qmax=p.C*p.E;
+    if(sim4Chart){sim4Chart.data.labels=[];sim4Chart.data.datasets[0].data=[];sim4Chart.update();}
+    this.anim=setInterval(()=>{
+      if(this.paused)return;
+      const t=i/steps*tmax; const charge=this.q(t,p); const volt=charge/p.C;
+      if(sim4Chart){sim4Chart.data.labels.push(t.toFixed(2));sim4Chart.data.datasets[0].data.push((charge*1000).toFixed(4));if(sim4Chart.data.labels.length>80){sim4Chart.data.labels.shift();sim4Chart.data.datasets[0].data.shift();}sim4Chart.update();}
+      document.getElementById('m4-time').innerHTML=t.toFixed(2)+'<span class="metric-unit">s</span>';
+      document.getElementById('m4-charge').innerHTML=(charge*1000).toFixed(3)+'<span class="metric-unit">mC</span>';
+      document.getElementById('m4-volt').innerHTML=volt.toFixed(2)+'<span class="metric-unit">V</span>';
+      document.getElementById('sim4-timeline').style.width=(i/steps*100)+'%';
+      const ratio=charge/Qmax;
+      if(sim4_renderer.glow){sim4_renderer.glow.scale.setScalar(ratio*2);sim4_renderer.glow.material.opacity=0.1+ratio*0.4;}
+      if(sim4_renderer.cap){const b=ratio; sim4_renderer.cap.material.emissive.setRGB(0,b*0.3,b);}
+      if(sim4_renderer.pLight){sim4_renderer.pLight.intensity=1+ratio*5;}
+      i++; if(i>steps){clearInterval(this.anim);this.running=false;document.getElementById('sim4-status').textContent='COMPLETADO';}
+    },60);
+  },
+  togglePause(){ this.paused=!this.paused; document.getElementById('sim4-pause').textContent=this.paused?'▶ REANUDAR':'⏸ PAUSAR'; document.getElementById('sim4-status').textContent=this.paused?'PAUSADO':'CARGANDO'; },
+  reset(){ clearInterval(this.anim);this.running=false;this.paused=false;document.getElementById('sim4-status').textContent='LISTO';document.getElementById('sim4-timeline').style.width='0%';document.getElementById('sim4-pause').textContent='⏸ PAUSAR';if(sim4Chart){sim4Chart.data.labels=[];sim4Chart.data.datasets[0].data=[];sim4Chart.update();}if(sim4_renderer.glow)sim4_renderer.glow.scale.setScalar(0);this.updateResult(); }
+};
+
+// ═══════════════════════════════════════════════════
+// SIMULATOR 5 — VIDA MEDIA
+// ═══════════════════════════════════════════════════
+let sim5Chart=null, sim5_renderer={};
+function initSim5_3D(){
+  sim5Chart=makeChart('sim5-chart','Vida Útil (%)','#8b5cf6','rgba(139,92,246,0.08)');
+  const canvas=document.getElementById('sim5-3d');
+  const renderer=new THREE.WebGLRenderer({canvas,alpha:true,antialias:true});
+  renderer.setSize(canvas.offsetWidth,canvas.offsetHeight);
+  const scene=new THREE.Scene();
+  const camera=new THREE.PerspectiveCamera(50,canvas.offsetWidth/canvas.offsetHeight,0.1,100);
+  camera.position.set(0,0,5);
+  // Engine cylinder
+  const engGeo=new THREE.CylinderGeometry(0.8,0.8,1.5,16);
+  const engMat=new THREE.MeshPhongMaterial({color:0x445566,emissive:0x001122,metalness:0.8});
+  const engine=new THREE.Mesh(engGeo,engMat); scene.add(engine);
+  // Piston
+  const pisGeo=new THREE.CylinderGeometry(0.6,0.6,0.5,16);
+  const pisMat=new THREE.MeshPhongMaterial({color:0x667788});
+  const piston=new THREE.Mesh(pisGeo,pisMat); piston.position.y=1; scene.add(piston);
+  // Oil glow
+  const oilGeo=new THREE.CylinderGeometry(0.79,0.79,1.49,32);
+  const oilMat=new THREE.MeshBasicMaterial({color:0x8b5cf6,transparent:true,opacity:0.3,side:THREE.BackSide});
+  const oil=new THREE.Mesh(oilGeo,oilMat); scene.add(oil);
+  const pLight=new THREE.PointLight(0x8b5cf6,2,10); pLight.position.set(0,3,3); scene.add(pLight);
+  scene.add(new THREE.AmbientLight(0x112244,1));
+  sim5_renderer={renderer,scene,camera,engine,piston,oil,pLight};
+  let pisDir=1;
+  function loop(){
+    requestAnimationFrame(loop);
+    engine.rotation.y+=0.01;
+    piston.position.y+=0.02*pisDir;
+    if(piston.position.y>1.4||piston.position.y<0.6)pisDir*=-1;
+    renderer.render(scene,camera);
+  }
+  loop();
+  bindSlider('halflife-slider','halflife-val'); bindSlider('km-slider','km-val'); bindSlider('thresh-slider','thresh-val'); bindSlider('oilspeed-slider','oilspeed-val',v=>v+'x');
+  [['halflife-slider'],['km-slider'],['thresh-slider']].forEach(([id])=>document.getElementById(id).addEventListener('input',()=>sim5.updateResult()));
+  sim5.updateResult();
+}
+const sim5={
+  running:false,paused:false,anim:null,
+  getParams(){ return {HL:+document.getElementById('halflife-slider').value, KM:+document.getElementById('km-slider').value, thresh:+document.getElementById('thresh-slider').value, speed:+document.getElementById('oilspeed-slider').value}; },
+  L(km,p){ return 100*Math.pow(2,-km/p.HL); },
+  getState(L,p){ if(L>70)return['ÓPTIMO','ind-green']; if(L>p.thresh)return['BUENO','ind-blue']; if(L>10)return['CAMBIAR','ind-yellow']; return['CRÍTICO','ind-red']; },
+  updateResult(){ const p=this.getParams(); const res=this.L(p.KM,p); document.getElementById('m5-result').innerHTML=res.toFixed(1)+'<span class="metric-unit">%</span>'; },
+  start(){
+    if(this.running)return; this.reset(); this.running=true; this.paused=false;
+    document.getElementById('sim5-status').textContent='ANALIZANDO';
+    const p=this.getParams(); const steps=120; let i=0;
+    if(sim5Chart){sim5Chart.data.labels=[];sim5Chart.data.datasets[0].data=[];sim5Chart.update();}
+    this.anim=setInterval(()=>{
+      if(this.paused)return;
+      const km=i/steps*p.KM; const life=this.L(km,p);
+      if(sim5Chart){sim5Chart.data.labels.push(Math.round(km));sim5Chart.data.datasets[0].data.push(life.toFixed(1));if(sim5Chart.data.labels.length>80){sim5Chart.data.labels.shift();sim5Chart.data.datasets[0].data.shift();}sim5Chart.update();}
+      document.getElementById('m5-km').textContent=Math.round(km);
+      document.getElementById('m5-life').innerHTML=life.toFixed(1)+'<span class="metric-unit">%</span>';
+      const [state,cls]=this.getState(life,p);
+      const stateEl=document.getElementById('m5-state'); stateEl.textContent=state;
+      stateEl.style.color=cls==='ind-green'?'var(--neon)':cls==='ind-blue'?'var(--cyan)':cls==='ind-yellow'?'#ffbb00':'#ff4444';
+      document.getElementById('sim5-timeline').style.width=(i/steps*100)+'%';
+      if(sim5_renderer.oil){ const ratio=life/100; sim5_renderer.oil.material.color.setRGB(0.5*(1-ratio)+ratio*0.54, ratio*0.36, ratio*0.98); sim5_renderer.oil.material.opacity=0.1+ratio*0.4; sim5_renderer.pLight.intensity=0.5+ratio*2.5; }
+      i++; if(i>steps){clearInterval(this.anim);this.running=false;document.getElementById('sim5-status').textContent='COMPLETADO';}
+    },60/p.speed);
+  },
+  togglePause(){ this.paused=!this.paused; document.getElementById('sim5-pause').textContent=this.paused?'▶ REANUDAR':'⏸ PAUSAR'; document.getElementById('sim5-status').textContent=this.paused?'PAUSADO':'ANALIZANDO'; },
+  reset(){ clearInterval(this.anim);this.running=false;this.paused=false;document.getElementById('sim5-status').textContent='LISTO';document.getElementById('sim5-timeline').style.width='0%';document.getElementById('sim5-pause').textContent='⏸ PAUSAR';if(sim5Chart){sim5Chart.data.labels=[];sim5Chart.data.datasets[0].data=[];sim5Chart.update();}if(sim5_renderer.oil){sim5_renderer.oil.material.opacity=0.3;}this.updateResult(); }
+};
+
+// ═══════════════════════════════════════════════════
+// INITIAL STATE
+// ═══════════════════════════════════════════════════
+showHome();
+</script>
+</body>
+</html>
